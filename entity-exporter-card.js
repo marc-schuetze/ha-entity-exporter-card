@@ -1,11 +1,37 @@
 // Entity Exporter Card for Home Assistant
-// Version: 1.2.0
+// Version: 1.3.0
 // Author: scharc (https://github.com/scharc)
 // License: MIT
 // Created using "vibe coding" - collaborative AI-assisted development
 
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.3.0";
 console.log("[HA Entity Exporter] Loading version:", CARD_VERSION);
+
+// Known domains, grouped for the UI. Any domain present in hass.states but not
+// listed here lands in "Other" — the card never hides a domain it does not know.
+const DOMAIN_GROUPS = {
+  "Inputs": ["input_boolean","input_number","input_select","input_text","input_datetime","input_button","counter","timer"],
+  "Devices": ["sensor","binary_sensor","switch","light","climate","cover","fan","vacuum","media_player","camera","lock","device_tracker","zone","person"],
+  "Automation": ["script","automation","scene","button"],
+  "Calendar": ["calendar"]
+};
+
+// Pure: map the domains actually present in this HA install onto DOMAIN_GROUPS,
+// dropping empty groups and collecting unknown domains into "Other".
+function groupDomains(presentDomains) {
+  const present = new Set(presentDomains);
+  const groups = {};
+  const known = new Set();
+  for (const [name, domains] of Object.entries(DOMAIN_GROUPS)) {
+    domains.forEach(d => known.add(d));
+    const hits = domains.filter(d => present.has(d));
+    if (hits.length) groups[name] = hits;
+  }
+  const other = presentDomains.filter(d => !known.has(d));
+  if (other.length) groups["Other"] = other;
+  return groups;
+}
+
 console.log("[HA Entity Exporter] Registering custom card");
 
 const HaCard = customElements.get("hui-entities-card");
@@ -142,8 +168,20 @@ class HaEntityExporterCard extends LitElement {
 
   set hass(hass) {
     this._hass = hass;
+    // ponytail: rescans every entity id on each hass update (~0.1ms at 3.5k entities).
+    // Cache against a states-object fingerprint only if this ever shows up in a profile.
+    const domains = [...new Set(Object.keys(hass.states || {}).map(id => id.split(".")[0]))].sort();
+    if (domains.length !== this.allDomains.length || domains.some((d, i) => d !== this.allDomains[i])) {
+      this.allDomains = domains;
+      if (!this._domainsInitialized && domains.length) {
+        this._domainsInitialized = true;
+        this.selectedDomains = new Set(domains);
+      }
+    }
     this.requestUpdate();
   }
+
+  get domainGroups() { return groupDomains(this.allDomains); }
 
   constructor() {
     super();
@@ -157,20 +195,8 @@ class HaEntityExporterCard extends LitElement {
     this.downloadState = "idle";
     this.hasClipboardSupport = false;
 
-    this.allDomains = [
-      "input_boolean","input_number","input_select","input_text","input_datetime","counter","timer",
-      "sensor","binary_sensor","switch","light","climate","cover","fan","vacuum","media_player","device_tracker","zone","person",
-      "script","automation","button",
-      "calendar"
-    ];
-    this.allDomains.forEach(d => this.selectedDomains.add(d));
-
-    this.domainGroups = {
-      "Inputs": ["input_boolean","input_number","input_select","input_text","input_datetime","counter","timer"],
-      "Devices": ["sensor","binary_sensor","switch","light","climate","cover","fan","vacuum","media_player","device_tracker","zone","person"],
-      "Automation": ["script","automation","button"],
-      "Calendar": ["calendar"]
-    };
+    this.allDomains = [];
+    this._domainsInitialized = false;
   }
 
   connectedCallback() {

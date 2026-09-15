@@ -103,7 +103,7 @@ class HaEntityExporterCard extends LitElement {
           border-radius: 3px;
           font-size: 0.7rem;
           background: var(--divider-color, #444);
-          color: var(--secondary-text-color, #aaa);
+          color: var(--primary-text-color, #aaa);
         }
         .live-filter-indicator {
           font-style: italic;

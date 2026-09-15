@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Entity Exporter Card harness</title>
+<style>
+  body { margin: 0; padding: 1rem; font-family: sans-serif; background: #111; }
+  body.light {
+    background: #fafafa;
+    --card-background-color: #ffffff;
+    --primary-text-color: #212121;
+    --secondary-text-color: #727272;
+    --secondary-background-color: #e5e5e5;
+    --divider-color: #c8c8c8;
+    --primary-color: #03a9f4;
+    --success-color: #0f9d58;
+    --error-color: #db4437;
+  }
+  #host { max-width: 520px; }
+</style>
+<div id="host"></div>
+<script type="module">
+  import { LitElement, html, css } from "https://esm.sh/lit@3";
+  // Home Assistant exposes html/css on the LitElement prototype; custom cards
+  // reach them via Object.getPrototypeOf(customElements.get("hui-entities-card")).
+  LitElement.prototype.html = html;
+  LitElement.prototype.css = css;
+  customElements.define("hui-entities-card", class extends LitElement {});
+
+  const { makeHass, COUNTS } = await import("./fake-hass.js");
+  window.COUNTS = COUNTS;
+
+  await import("../entity-exporter-card.js");
+  await customElements.whenDefined("entity-exporter-card");
+
+  const card = document.createElement("entity-exporter-card");
+  card.setConfig({ type: "entity-exporter-card" });
+  document.getElementById("host").appendChild(card);
+  card.hass = makeHass();
+
+  window.card = card;
+  window.remakeHass = (opts) => { card.hass = makeHass(opts); };
+  await card.updateComplete;
+  window.__harnessReady = true;
+</script>

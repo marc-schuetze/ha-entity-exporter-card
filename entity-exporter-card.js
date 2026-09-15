@@ -51,24 +51,27 @@ class HaEntityExporterCard extends LitElement {
       LitElement.prototype.css ? LitElement.prototype.css`
         :host {
           display: block;
-          font-family: sans-serif;
-          background: #1e1e1e;
-          color: white;
+          font-family: var(--paper-font-body1_-_font-family, sans-serif);
+          background: var(--ha-card-background, var(--card-background-color, #1e1e1e));
+          color: var(--primary-text-color, white);
           padding: 1rem;
-          border-radius: 8px;
-          box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+          border-radius: var(--ha-card-border-radius, 8px);
+          box-shadow: var(--ha-card-box-shadow, 0 0 6px rgba(0, 0, 0, 0.4));
         }
         h2 {
           margin: 0 0 1rem;
         }
-        input, button {
+        input:not([type=checkbox]), button {
           font-size: 0.9rem;
           padding: 0.3rem;
           border: none;
           border-radius: 4px;
+          background: var(--secondary-background-color, #eee);
+          color: var(--primary-text-color, #111);
         }
         input[type=checkbox] {
           margin-right: 0.25rem;
+          accent-color: var(--primary-color, #6af);
         }
         .filter-controls, .domain-controls, .button-row {
           display: flex;
@@ -79,11 +82,11 @@ class HaEntityExporterCard extends LitElement {
         .filter-status {
           font-size: 0.85rem;
           margin-bottom: 0.5rem;
-          color: #aaa;
+          color: var(--secondary-text-color, #aaa);
         }
         .live-filter-indicator {
           font-style: italic;
-          color: #6af;
+          color: var(--primary-color, #6af);
         }
         .tags {
           display: flex;
@@ -92,19 +95,19 @@ class HaEntityExporterCard extends LitElement {
           margin-bottom: 0.5rem;
         }
         .tag {
-          background: #333;
+          background: var(--secondary-background-color, #333);
           padding: 2px 6px;
           border-radius: 4px;
           font-size: 0.75rem;
           cursor: pointer;
         }
         .tag:hover {
-          background: #444;
+          background: var(--divider-color, #444);
         }
         .preview {
           max-height: 250px;
           overflow-y: auto;
-          background: #111;
+          background: var(--secondary-background-color, #111);
           padding: 0.5rem;
           border-radius: 4px;
           font-size: 0.8rem;
@@ -114,11 +117,11 @@ class HaEntityExporterCard extends LitElement {
           margin-top: 0.5rem;
         }
         .domain-section {
-          border: 1px solid #333;
+          border: 1px solid var(--divider-color, #333);
           border-radius: 6px;
           padding: 0.5rem;
           margin-bottom: 0.5rem;
-          background: #222;
+          background: var(--secondary-background-color, #222);
         }
         .section-header {
           display: flex;
@@ -134,12 +137,12 @@ class HaEntityExporterCard extends LitElement {
           gap: 0.3rem;
         }
         .button-row button.success {
-          background: #3a3;
-          color: white;
+          background: var(--success-color, #3a3);
+          color: var(--text-primary-color, white);
         }
         .button-row button.error {
-          background: #a33;
-          color: white;
+          background: var(--error-color, #a33);
+          color: var(--text-primary-color, white);
         }
       ` : null
     ].filter(Boolean);

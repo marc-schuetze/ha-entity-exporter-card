@@ -1,11 +1,47 @@
 // Entity Exporter Card for Home Assistant
-// Version: 1.2.0
-// Author: scharc (https://github.com/scharc)
+// Version: 1.3.0
+// Author: Marc Schütze (https://github.com/marc-schuetze)
 // License: MIT
 // Created using "vibe coding" - collaborative AI-assisted development
 
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.3.0";
 console.log("[HA Entity Exporter] Loading version:", CARD_VERSION);
+
+// Known domains, grouped for the UI. Any domain present in hass.states but not
+// listed here lands in "Other" — the card never hides a domain it does not know.
+const DOMAIN_GROUPS = {
+  "Inputs": ["input_boolean","input_number","input_select","input_text","input_datetime","input_button","counter","timer"],
+  "Devices": ["sensor","binary_sensor","switch","light","climate","cover","fan","vacuum","media_player","camera","lock","device_tracker","zone","person"],
+  "Automation": ["script","automation","scene","button"],
+  "Calendar": ["calendar"]
+};
+
+// Pure: map the domains actually present in this HA install onto DOMAIN_GROUPS,
+// dropping empty groups and collecting unknown domains into "Other".
+function groupDomains(presentDomains) {
+  const present = new Set(presentDomains);
+  const groups = {};
+  const known = new Set();
+  for (const [name, domains] of Object.entries(DOMAIN_GROUPS)) {
+    domains.forEach(d => known.add(d));
+    const hits = domains.filter(d => present.has(d));
+    if (hits.length) groups[name] = hits;
+  }
+  const other = presentDomains.filter(d => !known.has(d));
+  if (other.length) groups["Other"] = other;
+  return groups;
+}
+
+// Pure: domains the card has never seen before start out selected, so entities
+// are never silently withheld. A domain the user deselected stays deselected,
+// because it is already in prevDomains and therefore not "new".
+function nextDomainSelection(prevDomains, nextDomains, selected) {
+  const known = new Set(prevDomains);
+  const out = new Set(selected);
+  nextDomains.forEach(d => { if (!known.has(d)) out.add(d); });
+  return out;
+}
+
 console.log("[HA Entity Exporter] Registering custom card");
 
 const HaCard = customElements.get("hui-entities-card");
@@ -25,24 +61,27 @@ class HaEntityExporterCard extends LitElement {
       LitElement.prototype.css ? LitElement.prototype.css`
         :host {
           display: block;
-          font-family: sans-serif;
-          background: #1e1e1e;
-          color: white;
+          font-family: var(--paper-font-body1_-_font-family, sans-serif);
+          background: var(--ha-card-background, var(--card-background-color, #1e1e1e));
+          color: var(--primary-text-color, white);
           padding: 1rem;
-          border-radius: 8px;
-          box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+          border-radius: var(--ha-card-border-radius, 8px);
+          box-shadow: var(--ha-card-box-shadow, 0 0 6px rgba(0, 0, 0, 0.4));
         }
         h2 {
           margin: 0 0 1rem;
         }
-        input, button {
+        input:not([type=checkbox]), button {
           font-size: 0.9rem;
           padding: 0.3rem;
           border: none;
           border-radius: 4px;
+          background: var(--secondary-background-color, #eee);
+          color: var(--primary-text-color, #111);
         }
         input[type=checkbox] {
           margin-right: 0.25rem;
+          accent-color: var(--primary-color, #6af);
         }
         .filter-controls, .domain-controls, .button-row {
           display: flex;
@@ -53,11 +92,22 @@ class HaEntityExporterCard extends LitElement {
         .filter-status {
           font-size: 0.85rem;
           margin-bottom: 0.5rem;
-          color: #aaa;
+          color: var(--secondary-text-color, #aaa);
+        }
+        .error-text {
+          color: var(--error-color, #a33);
+        }
+        .disabled-tag {
+          margin-left: 0.4rem;
+          padding: 0 4px;
+          border-radius: 3px;
+          font-size: 0.7rem;
+          background: var(--divider-color, #444);
+          color: var(--primary-text-color, #aaa);
         }
         .live-filter-indicator {
           font-style: italic;
-          color: #6af;
+          color: var(--primary-color, #6af);
         }
         .tags {
           display: flex;
@@ -66,19 +116,19 @@ class HaEntityExporterCard extends LitElement {
           margin-bottom: 0.5rem;
         }
         .tag {
-          background: #333;
+          background: var(--secondary-background-color, #333);
           padding: 2px 6px;
           border-radius: 4px;
           font-size: 0.75rem;
           cursor: pointer;
         }
         .tag:hover {
-          background: #444;
+          background: var(--divider-color, #444);
         }
         .preview {
           max-height: 250px;
           overflow-y: auto;
-          background: #111;
+          background: var(--secondary-background-color, #111);
           padding: 0.5rem;
           border-radius: 4px;
           font-size: 0.8rem;
@@ -88,11 +138,11 @@ class HaEntityExporterCard extends LitElement {
           margin-top: 0.5rem;
         }
         .domain-section {
-          border: 1px solid #333;
+          border: 1px solid var(--divider-color, #333);
           border-radius: 6px;
           padding: 0.5rem;
           margin-bottom: 0.5rem;
-          background: #222;
+          background: var(--secondary-background-color, #222);
         }
         .section-header {
           display: flex;
@@ -108,12 +158,12 @@ class HaEntityExporterCard extends LitElement {
           gap: 0.3rem;
         }
         .button-row button.success {
-          background: #3a3;
-          color: white;
+          background: var(--success-color, #3a3);
+          color: var(--text-primary-color, white);
         }
         .button-row button.error {
-          background: #a33;
-          color: white;
+          background: var(--error-color, #a33);
+          color: var(--text-primary-color, white);
         }
       ` : null
     ].filter(Boolean);
@@ -131,7 +181,8 @@ class HaEntityExporterCard extends LitElement {
       copyState: { state: true },
       downloadState: { state: true },
       hasClipboardSupport: { state: true },
-      domainGroups: { state: true },
+      includeDisabled: { state: true },
+      disabledState: { state: true },
     };
   }
 
@@ -142,6 +193,56 @@ class HaEntityExporterCard extends LitElement {
 
   set hass(hass) {
     this._hass = hass;
+    this._refreshDomains();
+    this.requestUpdate();
+  }
+
+  get domainGroups() { return groupDomains(this.allDomains); }
+
+  // Every entity id the card can currently show: the states object, plus the
+  // disabled entities from the registry when the user asked for them. Disabled
+  // entities have no state, so they only ever exist as registry rows.
+  entityIds() {
+    const ids = Object.keys(this._hass?.states || {});
+    if (this.includeDisabled && this._disabledEntities) ids.push(...this._disabledEntities.keys());
+    return ids;
+  }
+
+  _refreshDomains() {
+    // ponytail: rescans every entity id on each hass update (~0.1ms at 3.5k entities).
+    // Cache against a states-object fingerprint only if this ever shows up in a profile.
+    const domains = [...new Set(this.entityIds().map(id => id.split(".")[0]))].sort();
+    if (domains.length === this.allDomains.length && domains.every((d, i) => d === this.allDomains[i])) return;
+    this.selectedDomains = nextDomainSelection(this.allDomains, domains, this.selectedDomains);
+    this.allDomains = domains;
+  }
+
+  // Disabled entities are absent from hass.states, so they have to come from the
+  // entity registry. The websocket call needs an admin user; a non-admin gets an
+  // error back, which is surfaced rather than swallowed.
+  async _loadDisabledEntities() {
+    this.disabledState = "loading";
+    this.requestUpdate();
+    try {
+      const registry = await this._hass.callWS({ type: "config/entity_registry/list" });
+      this._disabledEntities = new Map(
+        registry
+          .filter(e => e.disabled_by && !(e.entity_id in this._hass.states))
+          .map(e => [e.entity_id, e])
+      );
+      this.disabledState = "idle";
+    } catch (err) {
+      console.error("[HA Entity Exporter] Could not read the entity registry:", err);
+      this._disabledEntities = null;
+      this.includeDisabled = false;
+      this.disabledState = "error";
+    }
+  }
+
+  async toggleIncludeDisabled(checked) {
+    this.includeDisabled = checked;
+    if (checked && !this._disabledEntities) await this._loadDisabledEntities();
+    this._refreshDomains();
     this.requestUpdate();
   }
 
@@ -157,20 +258,10 @@ class HaEntityExporterCard extends LitElement {
     this.downloadState = "idle";
     this.hasClipboardSupport = false;
 
-    this.allDomains = [
-      "input_boolean","input_number","input_select","input_text","input_datetime","counter","timer",
-      "sensor","binary_sensor","switch","light","climate","cover","fan","vacuum","media_player","device_tracker","zone","person",
-      "script","automation","button",
-      "calendar"
-    ];
-    this.allDomains.forEach(d => this.selectedDomains.add(d));
-
-    this.domainGroups = {
-      "Inputs": ["input_boolean","input_number","input_select","input_text","input_datetime","counter","timer"],
-      "Devices": ["sensor","binary_sensor","switch","light","climate","cover","fan","vacuum","media_player","device_tracker","zone","person"],
-      "Automation": ["script","automation","button"],
-      "Calendar": ["calendar"]
-    };
+    this.allDomains = [];
+    this.includeDisabled = false;
+    this.disabledState = "idle";
+    this._disabledEntities = null;
   }
 
   connectedCallback() {
@@ -184,8 +275,8 @@ class HaEntityExporterCard extends LitElement {
     if (!this._hass) return html`<div>Loading Home Assistant...</div>`;
 
     const filteredEntities = this.groupedPreview().reduce((total, group) => total + group.ids.length, 0);
-    const totalAvailableEntities = Object.entries(this._hass.states)
-      .filter(([id]) => this.selectedDomains.has(id.split(".")[0]))
+    const totalAvailableEntities = this.entityIds()
+      .filter(id => this.selectedDomains.has(id.split(".")[0]))
       .length;
 
     return html`
@@ -204,7 +295,17 @@ class HaEntityExporterCard extends LitElement {
           placeholder="Filter entities..."
         />
         <button @click=${this.addFilter}>Add Filter</button>
+        <label title="Disabled entities have no state, so they are read from the entity registry">
+          <input type="checkbox"
+            .checked=${this.includeDisabled}
+            .disabled=${this.disabledState === "loading"}
+            @change=${(e) => this.toggleIncludeDisabled(e.target.checked)} />
+          Include disabled
+        </label>
       </div>
+
+      ${this.disabledState === "loading" ? html`<div class="filter-status">Reading entity registry...</div>` : ''}
+      ${this.disabledState === "error" ? html`<div class="filter-status error-text">Could not read the entity registry. Listing disabled entities needs an admin account.</div>` : ''}
 
       <div class="filter-status">
         Showing ${filteredEntities} of ${totalAvailableEntities} entities
@@ -241,7 +342,7 @@ class HaEntityExporterCard extends LitElement {
         ${this.groupedPreview().map(({ domain, ids }) => html`
           <div class="domain-group">
             <div class="bold">${domain} (${ids.length})</div>
-            ${ids.map(id => html`<div>${id}</div>`)}
+            ${ids.map(id => html`<div>${id}${this._disabledEntities?.has(id) ? html`<span class="disabled-tag">disabled</span>` : ''}</div>`)}
           </div>
         `)}
       </div>
@@ -266,7 +367,7 @@ class HaEntityExporterCard extends LitElement {
     if(!this._hass?.states) return [];
     const tempFilterValue=this.tempFilter.trim();
     const out={};
-    Object.entries(this._hass.states).forEach(([id,obj])=>{
+    this.entityIds().forEach(id=>{
       const domain=id.split(".")[0];
       if(!this.selectedDomains.has(domain)) return;
       let matchAnyFilter=false;
@@ -283,6 +384,11 @@ class HaEntityExporterCard extends LitElement {
     const result={};
     this.groupedPreview().flatMap(g=>g.ids).forEach(id=>{
       const obj=this._hass.states[id];
+      if(!obj){
+        // Disabled: registry row only, no state and no attributes to report.
+        result[id]={state:null,disabled_by:this._disabledEntities?.get(id)?.disabled_by ?? "unknown",attributes:{}};
+        return;
+      }
       const attrs=Object.entries(obj.attributes).slice(0,10);
       result[id]={state:obj.state,attributes:Object.fromEntries(attrs)};
     });

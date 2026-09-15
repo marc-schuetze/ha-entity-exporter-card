@@ -6,6 +6,11 @@ A custom Lovelace card for filtering and exporting Home Assistant entities as JS
 
 ![Entity Exporter Preview](https://raw.githubusercontent.com/marc-schuetze/ha-entity-exporter-card/main/images/entity-exporter-card.png)
 
+Every domain in your install is listed — anything outside the named groups lands under **Other**.
+The dropdown switches between enabled, enabled + disabled, and disabled-only entities:
+
+![Disabled only](https://raw.githubusercontent.com/marc-schuetze/ha-entity-exporter-card/main/images/disabled-only.png)
+
 ## Features
 
 - Filter entities by domain type — every domain in your install, discovered at runtime

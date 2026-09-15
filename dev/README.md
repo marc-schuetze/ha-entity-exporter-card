@@ -18,6 +18,10 @@ non-admin user sees.
 
 Useful handles on `window`: `card`, `COUNTS`, `remakeHass(opts)`, `__wsCalls`.
 
+The entity ids read like a real install (`light.living_room_ceiling`) rather than
+`fake_light_0`, because the README screenshots are taken from this harness — screenshotting
+a real Home Assistant would put someone's actual home in a public image.
+
 Toggling the light theme is `document.body.classList.add("light")`.
 
 For the pure grouping and selection logic there is a faster check that needs no browser:

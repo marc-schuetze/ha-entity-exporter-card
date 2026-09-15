@@ -4,7 +4,7 @@ A custom Lovelace card for filtering and exporting Home Assistant entities as JS
 
 ✨ **Created with Vibe Coding** - This card was developed using AI assistance to transform ideas into practical code!
 
-![Entity Exporter Preview](https://raw.githubusercontent.com/scharc/ha-entity-exporter-card/main/images/entity-exporter-card.png)
+![Entity Exporter Preview](https://raw.githubusercontent.com/marc-schuetze/ha-entity-exporter-card/main/images/entity-exporter-card.png)
 
 ## Features
 
@@ -24,7 +24,7 @@ A custom Lovelace card for filtering and exporting Home Assistant entities as JS
    - Go to HACS → Frontend
    - Click the three dots in the top right
    - Select "Custom repositories"
-   - Add `https://github.com/scharc/ha-entity-exporter-card` as URL
+   - Add `https://github.com/marc-schuetze/ha-entity-exporter-card` as URL
    - Category: Lovelace
 3. Click "Install" on Entity Exporter Card
 4. Add the card to your dashboard

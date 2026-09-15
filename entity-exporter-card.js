@@ -1,6 +1,6 @@
 // Entity Exporter Card for Home Assistant
 // Version: 1.3.0
-// Author: scharc (https://github.com/scharc)
+// Author: Marc Schütze (https://github.com/marc-schuetze)
 // License: MIT
 // Created using "vibe coding" - collaborative AI-assisted development
 

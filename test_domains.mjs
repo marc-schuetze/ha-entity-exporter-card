@@ -40,4 +40,11 @@ assert.deepEqual([...nextDomainSelection(["light", "sensor"], ["light", "sensor"
 const after = nextDomainSelection(["light", "sensor"], ["camera", "light", "sensor"], new Set(["light"]));
 assert.deepEqual([...after].sort(), ["camera", "light"]);
 
+// The first argument is every domain ever seen, not just the ones currently
+// visible. Switching to "Disabled only" and back must not resurrect a
+// deselection: sensor drops out of the visible set, but stays "seen".
+const seen = ["camera", "light", "sensor"];
+const back = nextDomainSelection(seen, ["light", "sensor"], new Set(["light"]));
+assert.deepEqual([...back], ["light"], "sensor was deselected and must stay deselected");
+
 console.log("ok");

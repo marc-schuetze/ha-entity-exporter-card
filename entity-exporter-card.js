@@ -32,6 +32,16 @@ function groupDomains(presentDomains) {
   return groups;
 }
 
+// Pure: domains the card has never seen before start out selected, so entities
+// are never silently withheld. A domain the user deselected stays deselected,
+// because it is already in prevDomains and therefore not "new".
+function nextDomainSelection(prevDomains, nextDomains, selected) {
+  const known = new Set(prevDomains);
+  const out = new Set(selected);
+  nextDomains.forEach(d => { if (!known.has(d)) out.add(d); });
+  return out;
+}
+
 console.log("[HA Entity Exporter] Registering custom card");
 
 const HaCard = customElements.get("hui-entities-card");
@@ -82,6 +92,17 @@ class HaEntityExporterCard extends LitElement {
         .filter-status {
           font-size: 0.85rem;
           margin-bottom: 0.5rem;
+          color: var(--secondary-text-color, #aaa);
+        }
+        .error-text {
+          color: var(--error-color, #a33);
+        }
+        .disabled-tag {
+          margin-left: 0.4rem;
+          padding: 0 4px;
+          border-radius: 3px;
+          font-size: 0.7rem;
+          background: var(--divider-color, #444);
           color: var(--secondary-text-color, #aaa);
         }
         .live-filter-indicator {
@@ -160,6 +181,8 @@ class HaEntityExporterCard extends LitElement {
       copyState: { state: true },
       downloadState: { state: true },
       hasClipboardSupport: { state: true },
+      includeDisabled: { state: true },
+      disabledState: { state: true },
     };
   }
 
@@ -170,20 +193,58 @@ class HaEntityExporterCard extends LitElement {
 
   set hass(hass) {
     this._hass = hass;
-    // ponytail: rescans every entity id on each hass update (~0.1ms at 3.5k entities).
-    // Cache against a states-object fingerprint only if this ever shows up in a profile.
-    const domains = [...new Set(Object.keys(hass.states || {}).map(id => id.split(".")[0]))].sort();
-    if (domains.length !== this.allDomains.length || domains.some((d, i) => d !== this.allDomains[i])) {
-      this.allDomains = domains;
-      if (!this._domainsInitialized && domains.length) {
-        this._domainsInitialized = true;
-        this.selectedDomains = new Set(domains);
-      }
-    }
+    this._refreshDomains();
     this.requestUpdate();
   }
 
   get domainGroups() { return groupDomains(this.allDomains); }
+
+  // Every entity id the card can currently show: the states object, plus the
+  // disabled entities from the registry when the user asked for them. Disabled
+  // entities have no state, so they only ever exist as registry rows.
+  entityIds() {
+    const ids = Object.keys(this._hass?.states || {});
+    if (this.includeDisabled && this._disabledEntities) ids.push(...this._disabledEntities.keys());
+    return ids;
+  }
+
+  _refreshDomains() {
+    // ponytail: rescans every entity id on each hass update (~0.1ms at 3.5k entities).
+    // Cache against a states-object fingerprint only if this ever shows up in a profile.
+    const domains = [...new Set(this.entityIds().map(id => id.split(".")[0]))].sort();
+    if (domains.length === this.allDomains.length && domains.every((d, i) => d === this.allDomains[i])) return;
+    this.selectedDomains = nextDomainSelection(this.allDomains, domains, this.selectedDomains);
+    this.allDomains = domains;
+  }
+
+  // Disabled entities are absent from hass.states, so they have to come from the
+  // entity registry. The websocket call needs an admin user; a non-admin gets an
+  // error back, which is surfaced rather than swallowed.
+  async _loadDisabledEntities() {
+    this.disabledState = "loading";
+    this.requestUpdate();
+    try {
+      const registry = await this._hass.callWS({ type: "config/entity_registry/list" });
+      this._disabledEntities = new Map(
+        registry
+          .filter(e => e.disabled_by && !(e.entity_id in this._hass.states))
+          .map(e => [e.entity_id, e])
+      );
+      this.disabledState = "idle";
+    } catch (err) {
+      console.error("[HA Entity Exporter] Could not read the entity registry:", err);
+      this._disabledEntities = null;
+      this.includeDisabled = false;
+      this.disabledState = "error";
+    }
+  }
+
+  async toggleIncludeDisabled(checked) {
+    this.includeDisabled = checked;
+    if (checked && !this._disabledEntities) await this._loadDisabledEntities();
+    this._refreshDomains();
+    this.requestUpdate();
+  }
 
   constructor() {
     super();
@@ -198,7 +259,9 @@ class HaEntityExporterCard extends LitElement {
     this.hasClipboardSupport = false;
 
     this.allDomains = [];
-    this._domainsInitialized = false;
+    this.includeDisabled = false;
+    this.disabledState = "idle";
+    this._disabledEntities = null;
   }
 
   connectedCallback() {
@@ -212,8 +275,8 @@ class HaEntityExporterCard extends LitElement {
     if (!this._hass) return html`<div>Loading Home Assistant...</div>`;
 
     const filteredEntities = this.groupedPreview().reduce((total, group) => total + group.ids.length, 0);
-    const totalAvailableEntities = Object.entries(this._hass.states)
-      .filter(([id]) => this.selectedDomains.has(id.split(".")[0]))
+    const totalAvailableEntities = this.entityIds()
+      .filter(id => this.selectedDomains.has(id.split(".")[0]))
       .length;
 
     return html`
@@ -232,7 +295,17 @@ class HaEntityExporterCard extends LitElement {
           placeholder="Filter entities..."
         />
         <button @click=${this.addFilter}>Add Filter</button>
+        <label title="Disabled entities have no state, so they are read from the entity registry">
+          <input type="checkbox"
+            .checked=${this.includeDisabled}
+            .disabled=${this.disabledState === "loading"}
+            @change=${(e) => this.toggleIncludeDisabled(e.target.checked)} />
+          Include disabled
+        </label>
       </div>
+
+      ${this.disabledState === "loading" ? html`<div class="filter-status">Reading entity registry...</div>` : ''}
+      ${this.disabledState === "error" ? html`<div class="filter-status error-text">Could not read the entity registry. Listing disabled entities needs an admin account.</div>` : ''}
 
       <div class="filter-status">
         Showing ${filteredEntities} of ${totalAvailableEntities} entities
@@ -269,7 +342,7 @@ class HaEntityExporterCard extends LitElement {
         ${this.groupedPreview().map(({ domain, ids }) => html`
           <div class="domain-group">
             <div class="bold">${domain} (${ids.length})</div>
-            ${ids.map(id => html`<div>${id}</div>`)}
+            ${ids.map(id => html`<div>${id}${this._disabledEntities?.has(id) ? html`<span class="disabled-tag">disabled</span>` : ''}</div>`)}
           </div>
         `)}
       </div>
@@ -294,7 +367,7 @@ class HaEntityExporterCard extends LitElement {
     if(!this._hass?.states) return [];
     const tempFilterValue=this.tempFilter.trim();
     const out={};
-    Object.entries(this._hass.states).forEach(([id,obj])=>{
+    this.entityIds().forEach(id=>{
       const domain=id.split(".")[0];
       if(!this.selectedDomains.has(domain)) return;
       let matchAnyFilter=false;
@@ -311,6 +384,11 @@ class HaEntityExporterCard extends LitElement {
     const result={};
     this.groupedPreview().flatMap(g=>g.ids).forEach(id=>{
       const obj=this._hass.states[id];
+      if(!obj){
+        // Disabled: registry row only, no state and no attributes to report.
+        result[id]={state:null,disabled_by:this._disabledEntities?.get(id)?.disabled_by ?? "unknown",attributes:{}};
+        return;
+      }
       const attrs=Object.entries(obj.attributes).slice(0,10);
       result[id]={state:obj.state,attributes:Object.fromEntries(attrs)};
     });

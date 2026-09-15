@@ -8,7 +8,8 @@ A custom Lovelace card for filtering and exporting Home Assistant entities as JS
 
 ## Features
 
-- Filter entities by domain type (light, sensor, switch, etc.)
+- Filter entities by domain type — every domain in your install, discovered at runtime
+- Optionally include disabled entities, which Home Assistant keeps out of the state machine
 - Add multiple text filters with OR relationship (show entities matching any filter)
 - Live filtering preview while typing
 - Export filtered entities as JSON
@@ -52,7 +53,24 @@ type: entity-exporter-card
 1. Select domains to filter entities by checking/unchecking domain boxes
 2. Type in the filter input to find specific entities
 3. Click "Add Filter" to save filters (multiple filters work as OR conditions)
-4. Use the copy or download buttons to export the filtered entities as JSON
+4. Tick "Include disabled" to add entities that are disabled in Home Assistant
+5. Use the copy or download buttons to export the filtered entities as JSON
+
+### Disabled entities
+Disabled entities are not in Home Assistant's state machine, so the card reads them from the
+entity registry instead. They are marked `disabled` in the preview and exported with a `null`
+state and the reason they are disabled:
+
+```json
+"sensor.printer_toner_black": {
+  "state": null,
+  "disabled_by": "integration",
+  "attributes": {}
+}
+```
+
+Reading the registry requires an **admin** account. Non-admin users get an error in place of
+the list. Leaving the box unticked skips the registry call entirely.
 
 ## Examples
 

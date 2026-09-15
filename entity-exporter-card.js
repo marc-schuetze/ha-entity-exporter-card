@@ -1,10 +1,10 @@
 // Entity Exporter Card for Home Assistant
-// Version: 1.3.0
+// Version: 1.4.0
 // Author: Marc Schütze (https://github.com/marc-schuetze)
 // License: MIT
 // Created using "vibe coding" - collaborative AI-assisted development
 
-const CARD_VERSION = "1.3.0";
+const CARD_VERSION = "1.4.0";
 console.log("[HA Entity Exporter] Loading version:", CARD_VERSION);
 
 // Known domains, grouped for the UI. Any domain present in hass.states but not
@@ -34,9 +34,11 @@ function groupDomains(presentDomains) {
 
 // Pure: domains the card has never seen before start out selected, so entities
 // are never silently withheld. A domain the user deselected stays deselected,
-// because it is already in prevDomains and therefore not "new".
-function nextDomainSelection(prevDomains, nextDomains, selected) {
-  const known = new Set(prevDomains);
+// because it is already in seenDomains and therefore not "new" — including when
+// it drops out of the visible set for a while, e.g. while showing only disabled
+// entities.
+function nextDomainSelection(seenDomains, nextDomains, selected) {
+  const known = new Set(seenDomains);
   const out = new Set(selected);
   nextDomains.forEach(d => { if (!known.has(d)) out.add(d); });
   return out;
@@ -71,7 +73,7 @@ class HaEntityExporterCard extends LitElement {
         h2 {
           margin: 0 0 1rem;
         }
-        input:not([type=checkbox]), button {
+        input:not([type=checkbox]), button, select {
           font-size: 0.9rem;
           padding: 0.3rem;
           border: none;
@@ -181,7 +183,7 @@ class HaEntityExporterCard extends LitElement {
       copyState: { state: true },
       downloadState: { state: true },
       hasClipboardSupport: { state: true },
-      includeDisabled: { state: true },
+      disabledFilter: { state: true },
       disabledState: { state: true },
     };
   }
@@ -199,12 +201,14 @@ class HaEntityExporterCard extends LitElement {
 
   get domainGroups() { return groupDomains(this.allDomains); }
 
-  // Every entity id the card can currently show: the states object, plus the
-  // disabled entities from the registry when the user asked for them. Disabled
-  // entities have no state, so they only ever exist as registry rows.
+  // Every entity id the card can currently show. Disabled entities have no
+  // state, so they only ever exist as registry rows: "only" is registry rows
+  // alone, and is empty until the registry has been read.
   entityIds() {
+    const disabled = this._disabledEntities;
+    if (this.disabledFilter === "only") return disabled ? [...disabled.keys()] : [];
     const ids = Object.keys(this._hass?.states || {});
-    if (this.includeDisabled && this._disabledEntities) ids.push(...this._disabledEntities.keys());
+    if (this.disabledFilter === "include" && disabled) ids.push(...disabled.keys());
     return ids;
   }
 
@@ -213,7 +217,8 @@ class HaEntityExporterCard extends LitElement {
     // Cache against a states-object fingerprint only if this ever shows up in a profile.
     const domains = [...new Set(this.entityIds().map(id => id.split(".")[0]))].sort();
     if (domains.length === this.allDomains.length && domains.every((d, i) => d === this.allDomains[i])) return;
-    this.selectedDomains = nextDomainSelection(this.allDomains, domains, this.selectedDomains);
+    this.selectedDomains = nextDomainSelection(this._seenDomains, domains, this.selectedDomains);
+    this._seenDomains = [...new Set([...this._seenDomains, ...domains])];
     this.allDomains = domains;
   }
 
@@ -234,14 +239,15 @@ class HaEntityExporterCard extends LitElement {
     } catch (err) {
       console.error("[HA Entity Exporter] Could not read the entity registry:", err);
       this._disabledEntities = null;
-      this.includeDisabled = false;
+      this.disabledFilter = "exclude";
       this.disabledState = "error";
     }
   }
 
-  async toggleIncludeDisabled(checked) {
-    this.includeDisabled = checked;
-    if (checked && !this._disabledEntities) await this._loadDisabledEntities();
+  // "exclude" (default) | "include" | "only"
+  async setDisabledFilter(value) {
+    this.disabledFilter = value;
+    if (value !== "exclude" && !this._disabledEntities) await this._loadDisabledEntities();
     this._refreshDomains();
     this.requestUpdate();
   }
@@ -259,9 +265,10 @@ class HaEntityExporterCard extends LitElement {
     this.hasClipboardSupport = false;
 
     this.allDomains = [];
-    this.includeDisabled = false;
+    this.disabledFilter = "exclude";
     this.disabledState = "idle";
     this._disabledEntities = null;
+    this._seenDomains = [];
   }
 
   connectedCallback() {
@@ -295,13 +302,14 @@ class HaEntityExporterCard extends LitElement {
           placeholder="Filter entities..."
         />
         <button @click=${this.addFilter}>Add Filter</button>
-        <label title="Disabled entities have no state, so they are read from the entity registry">
-          <input type="checkbox"
-            .checked=${this.includeDisabled}
-            .disabled=${this.disabledState === "loading"}
-            @change=${(e) => this.toggleIncludeDisabled(e.target.checked)} />
-          Include disabled
-        </label>
+        <select title="Disabled entities have no state, so they are read from the entity registry"
+          .value=${this.disabledFilter}
+          .disabled=${this.disabledState === "loading"}
+          @change=${(e) => this.setDisabledFilter(e.target.value)}>
+          <option value="exclude">Enabled entities</option>
+          <option value="include">Enabled + disabled</option>
+          <option value="only">Disabled only</option>
+        </select>
       </div>
 
       ${this.disabledState === "loading" ? html`<div class="filter-status">Reading entity registry...</div>` : ''}

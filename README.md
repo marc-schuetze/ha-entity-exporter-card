@@ -9,7 +9,7 @@ A custom Lovelace card for filtering and exporting Home Assistant entities as JS
 ## Features
 
 - Filter entities by domain type — every domain in your install, discovered at runtime
-- Optionally include disabled entities, which Home Assistant keeps out of the state machine
+- Show enabled entities, enabled + disabled, or **disabled only** — Home Assistant keeps disabled entities out of the state machine entirely
 - Add multiple text filters with OR relationship (show entities matching any filter)
 - Live filtering preview while typing
 - Export filtered entities as JSON
@@ -53,13 +53,24 @@ type: entity-exporter-card
 1. Select domains to filter entities by checking/unchecking domain boxes
 2. Type in the filter input to find specific entities
 3. Click "Add Filter" to save filters (multiple filters work as OR conditions)
-4. Tick "Include disabled" to add entities that are disabled in Home Assistant
+4. Use the dropdown to switch between "Enabled entities", "Enabled + disabled" and "Disabled only"
 5. Use the copy or download buttons to export the filtered entities as JSON
 
 ### Disabled entities
 Disabled entities are not in Home Assistant's state machine, so the card reads them from the
-entity registry instead. They are marked `disabled` in the preview and exported with a `null`
-state and the reason they are disabled:
+entity registry instead. The dropdown next to the filter input controls them:
+
+| Option | Shows |
+| --- | --- |
+| `Enabled entities` | Default. Only what is in the state machine; the registry is never read. |
+| `Enabled + disabled` | Both, with the disabled ones marked. |
+| `Disabled only` | Just the disabled entities, and only the domains that actually have any. |
+
+`Disabled only` is the quick way to pull a list of disabled `entity_id`s — for instance to feed
+them to a bulk renamer when they were created before the device was renamed.
+
+Disabled entities are marked `disabled` in the preview and exported with a `null` state and the
+reason they are disabled:
 
 ```json
 "sensor.printer_toner_black": {
@@ -70,7 +81,7 @@ state and the reason they are disabled:
 ```
 
 Reading the registry requires an **admin** account. Non-admin users get an error in place of
-the list. Leaving the box unticked skips the registry call entirely.
+the list. The registry is read once per session, and only if you switch away from the default option.
 
 ## Examples
 

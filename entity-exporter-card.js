@@ -157,7 +157,6 @@ class HaEntityExporterCard extends LitElement {
       copyState: { state: true },
       downloadState: { state: true },
       hasClipboardSupport: { state: true },
-      domainGroups: { state: true },
     };
   }
 
